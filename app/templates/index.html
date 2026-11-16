@@ -38,7 +38,7 @@
         <td class="mono">{{ j.created_at }}</td>
         <td>{{ j.r1_name }}</td>
         <td>{{ j.r2_name }}</td>
-        <td><span class="badge st-{{ j.status }}">{{ {"queued":"排队中","processing":"处理中","done":"完成","failed":"失败"}[j.status] }}</span></td>
+        <td><span class="badge st-{{ j.status }}">{{ {"queued":"排队中","processing":"处理中","done":"完成","failed":"失败","cancelled":"已取消"}[j.status] }}</span></td>
         <td class="num">{{ j.paired if j.paired is not none else "—" }}</td>
         <td class="num">{{ j.r1_only if j.r1_only is not none else "—" }}</td>
         <td class="num">{{ j.r2_only if j.r2_only is not none else "—" }}</td>

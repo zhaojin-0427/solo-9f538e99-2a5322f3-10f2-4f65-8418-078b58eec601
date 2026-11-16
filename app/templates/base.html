@@ -28,15 +28,21 @@
     .st-failed     { background: #fee2e2; color: var(--bad); }
     .st-processing { background: #dbeafe; color: var(--run); }
     .st-queued     { background: #fef9c3; color: var(--wait); }
+    .st-cancelled  { background: #e2e8f0; color: #475569; }
     .num { font-variant-numeric: tabular-nums; text-align: right; }
     .btn { display: inline-block; padding: 6px 14px; border-radius: 6px; border: 1px solid #cbd5e1;
            background: #fff; color: #1f2933; text-decoration: none; font-size: 13px; cursor: pointer; }
     .btn:hover { background: #f1f5f9; }
     .btn-primary { background: #16324f; border-color: #16324f; color: #fff; }
     .btn-primary:hover { background: #1f4468; }
+    .btn-danger { background: #b91c1c; border-color: #b91c1c; color: #fff; }
+    .btn-danger:hover { background: #991b1b; }
     .btn[disabled] { opacity: .45; pointer-events: none; }
     .flash { padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; }
     .flash.error { background: #fee2e2; color: var(--bad); }
+    .flash.info { background: #e0f2fe; color: #075985; }
+    .notice { background: #f1f5f9; border: 1px solid #cbd5e1; color: #334155;
+              padding: 10px 12px; border-radius: 6px; font-size: 13px; word-break: break-all; }
     .muted { color: #64748b; font-size: 12px; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
     .err { background: #fef2f2; border: 1px solid #fecaca; color: #7f1d1d;

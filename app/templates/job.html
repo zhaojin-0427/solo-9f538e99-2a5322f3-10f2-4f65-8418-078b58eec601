@@ -6,7 +6,7 @@
   <h2>任务详情 <span class="mono muted">{{ job.id }}</span></h2>
   <dl class="kv">
     <dt>状态</dt>
-    <dd><span class="badge st-{{ job.status }}">{{ {"queued":"排队中","processing":"处理中","done":"完成","failed":"失败"}[job.status] }}</span>
+    <dd><span class="badge st-{{ job.status }}">{{ {"queued":"排队中","processing":"处理中","done":"完成","failed":"失败","cancelled":"已取消"}[job.status] }}</span>
         {% if job.status in ("queued", "processing") %}<span class="muted">处理中，页面每 3 秒自动刷新</span>{% endif %}</dd>
     <dt>提交时间</dt><dd class="mono">{{ job.created_at }}</dd>
     <dt>R1 文件</dt><dd>{{ job.r1_name }}</dd>
@@ -20,7 +20,22 @@
   {% if job.status == "failed" %}
   <p class="err">失败原因：{{ job.message }}（本批未保留任何结果文件）</p>
   {% endif %}
+  {% if job.status == "cancelled" %}
+  <p class="notice">任务已取消（{{ job.message }}），四份结果均不可下载。</p>
+  {% endif %}
 </div>
+
+{% if job.status in ("queued", "processing") %}
+<div class="card">
+  <h2>取消任务</h2>
+  <p class="muted">选错批次可在配对完成前撤回。取消生效后将尽快停止解压与配对，
+     状态保持“已取消”，四份结果不可下载，上传与中间产物最终清理。</p>
+  <form method="post" action="{{ url_for('cancel_job', jid=job.id) }}"
+        onsubmit="return confirm('确认取消该任务？取消后不可恢复。');">
+    <button class="btn btn-danger" type="submit">取消任务</button>
+  </form>
+</div>
+{% endif %}
 
 {% if job.status == "done" %}
 <div class="card">

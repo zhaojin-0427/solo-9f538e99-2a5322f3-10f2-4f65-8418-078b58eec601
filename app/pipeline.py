@@ -35,6 +35,20 @@ class PipelineError(Exception):
     """输入数据或资源限制导致的可预期失败（信息可直接展示给用户）。"""
 
 
+class JobCancelled(Exception):
+    """任务被用户取消：协作式中断，不属于数据失败。"""
+
+
+def run_started():
+    """流水线入口同步钩子，默认空操作；测试可 monkeypatch 为带屏障的函数。"""
+
+
+def _check_cancel(cancel_event):
+    """取消协作点：事件被置位则尽快抛出，停止解压/建索引/配对。"""
+    if cancel_event is not None and cancel_event.is_set():
+        raise JobCancelled("任务已取消")
+
+
 def _fmt_id(rid):
     return rid.decode("utf-8", "replace")
 
@@ -94,7 +108,8 @@ def _flush_batch(con, sql, batch, side):
     con.commit()
 
 
-def index_side(gz_path, rec_path, scratch, table, side, max_bytes):
+def index_side(gz_path, rec_path, scratch, table, side, max_bytes,
+               cancel_event=None):
     """流式校验一侧 FASTQ，原始记录落盘，ID 登记唯一索引。返回记录数。"""
     con = sqlite3.connect(scratch)
     con.execute("PRAGMA journal_mode=OFF")
@@ -113,6 +128,7 @@ def index_side(gz_path, rec_path, scratch, table, side, max_bytes):
     try:
         with gzip.open(gz_path, "rb") as gz, open(rec_path, "wb") as rec:
             while True:
+                _check_cancel(cancel_event)  # 每条记录前检查，尽快停止解压
                 lines = []
                 for _ in range(4):
                     ln = _readline(gz, side)
@@ -173,7 +189,7 @@ def _fsync_dir(path):
         os.close(fd)
 
 
-def pair_pass(scratch, rec1_path, rec2_path, staged):
+def pair_pass(scratch, rec1_path, rec2_path, staged, cancel_event=None):
     """按 ID 配对并写出四个结果（两个成对文件均按 R1 原顺序）。返回计数。"""
     con = sqlite3.connect(scratch)
     con.execute("PRAGMA cache_size=-4000")
@@ -190,6 +206,7 @@ def pair_pass(scratch, rec1_path, rec2_path, staged):
             if not rows:
                 break
             for rid, off, ln in rows:
+                _check_cancel(cancel_event)  # 配对阶段取消协作点
                 rec = os.pread(fd1, ln, off)
                 hit = q2.execute(
                     "SELECT off, len FROM r2 WHERE id=?", (rid,)).fetchone()
@@ -208,6 +225,7 @@ def pair_pass(scratch, rec1_path, rec2_path, staged):
             if not rows:
                 break
             for rid, off, ln in rows:
+                _check_cancel(cancel_event)
                 if q1.execute(
                         "SELECT 1 FROM r1 WHERE id=?", (rid,)).fetchone() is None:
                     writers["unpaired_r2"].write(os.pread(fd2, ln, off))
@@ -221,20 +239,24 @@ def pair_pass(scratch, rec1_path, rec2_path, staged):
     return {"paired": paired, "r1_only": r1_only, "r2_only": r2_only}
 
 
-def run(r1_gz, r2_gz, work_dir, out_dir, max_bytes=DEFAULT_MAX_DECOMP_BYTES):
+def run(r1_gz, r2_gz, work_dir, out_dir, max_bytes=DEFAULT_MAX_DECOMP_BYTES,
+        cancel_event=None):
     """完整流程：校验建索引 -> 配对 -> 结果原子发布到 out_dir。返回计数。
 
     任何一步失败都抛异常，此时 out_dir 中不会有任何结果文件
     （结果先写在 work_dir，全部成功后才 rename 发布）。
+    cancel_event 被置位时抛 JobCancelled，同样不发布任何结果。
     """
+    run_started()  # 测试同步钩子（默认空操作），便于在进入流水线后确定性取消
     scratch = os.path.join(work_dir, "scratch.db")
     rec1 = os.path.join(work_dir, "r1.rec")
     rec2 = os.path.join(work_dir, "r2.rec")
-    index_side(r1_gz, rec1, scratch, "r1", "R1", max_bytes)
-    index_side(r2_gz, rec2, scratch, "r2", "R2", max_bytes)
+    index_side(r1_gz, rec1, scratch, "r1", "R1", max_bytes, cancel_event)
+    index_side(r2_gz, rec2, scratch, "r2", "R2", max_bytes, cancel_event)
     staged = {k: os.path.join(work_dir, name + ".tmp")
               for k, name in OUTPUT_FILES.items()}
-    counts = pair_pass(scratch, rec1, rec2, staged)
+    counts = pair_pass(scratch, rec1, rec2, staged, cancel_event)
+    _check_cancel(cancel_event)  # 发布前最后一道取消检查，取消则绝不发布
     os.makedirs(out_dir, exist_ok=True)
     for key, tmp in staged.items():
         os.replace(tmp, os.path.join(out_dir, OUTPUT_FILES[key]))
